@@ -1,0 +1,7 @@
+name = "demo"
+version = "0.1.0"
+description = "Gleam consumer of oresoftware/flags-2-env"
+licences = ["MIT"]
+
+[dependencies]
+gleam_stdlib = ">= 0.34.0 and < 2.0.0"
