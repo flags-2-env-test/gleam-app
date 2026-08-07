@@ -1,4 +1,3 @@
 .zed/
 .zpkg.lock
 build/
-manifest.toml
