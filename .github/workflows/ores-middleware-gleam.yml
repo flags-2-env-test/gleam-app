@@ -65,19 +65,24 @@ jobs:
             echo "Gleam middleware iteration $iteration"
             gleam test
           done
-      - name: Validate Gleam runtime descriptor
+      - name: Validate Gleam descriptor and source contract surface
         run: |
           set -euo pipefail
           cd middleware/src/gleam
-          descriptor="$(gleam run -m contractcheck)"
-          printf '%s\n' "$descriptor" | jq -e '
-            .contractVersion == "1.0.0" and
+          jq -e '
             .language == "gleam" and
+            .runtime == "erlang-otp" and
+            .packageName == "ores_middleware" and
             (.frameworkAdapters | index("gleam-http")) != null and
-            (.capabilities | index("request-context")) != null and
-            (.capabilities | index("deadline-timeout")) != null and
-            (.capabilities | index("auth")) != null
-          '
+            (.frameworkAdapters | index("cowboy")) != null and
+            .operationSymbols.descriptor == "descriptor" and
+            .operationSymbols.createMiddleware == "create_middleware" and
+            .operationSymbols.currentContext == "current_context"
+          ' adapter.manifest.json
+          grep -Fq 'pub const contract_version = "1.0.0"' src/ores_middleware.gleam
+          grep -Fq '"request-context"' src/ores_middleware.gleam
+          grep -Fq '"deadline-timeout"' src/ores_middleware.gleam
+          grep -Fq '"auth"' src/ores_middleware.gleam
       - name: Run randomized adversarial Gleam suite
         run: |
           set -euo pipefail
