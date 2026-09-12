@@ -1,0 +1,120 @@
+name: ORES middleware Gleam/OTP stress
+
+on:
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: "23 8 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ores-middleware-gleam-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  ORES_MIDDLEWARE_SHA: d588e7bf890c337500641ed06d0b90f7b7a57748
+
+jobs:
+  gleam:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: ORESoftware/ores-middleware
+          ref: ${{ env.ORES_MIDDLEWARE_SHA }}
+          path: middleware
+          persist-credentials: false
+          fetch-depth: 1
+      - uses: erlef/setup-beam@54075bcc5e249e4758d363f27d099f55d843f124
+        with:
+          otp-version: "27.3.4.14"
+          elixir-version: "1.18.4"
+          gleam-version: "1.18.1"
+          rebar3-version: "3.24.0"
+      - uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30
+        with:
+          toolchain: 1.95.0
+      - name: Prove immutable upstream checkout
+        run: |
+          set -euo pipefail
+          test "$(git -C middleware rev-parse HEAD)" = "$ORES_MIDDLEWARE_SHA"
+          test -z "$(git -C middleware status --porcelain)"
+      - name: Resolve dependencies and classify manifest drift
+        run: |
+          set -euo pipefail
+          cd middleware/src/gleam
+          gleam build
+          if git diff --quiet -- gleam.toml manifest.toml; then
+            echo "ORES_MIDDLEWARE_GLEAM_LOCK_DRIFT=false" >> "$GITHUB_ENV"
+          else
+            echo "ORES_MIDDLEWARE_GLEAM_LOCK_DRIFT=true" >> "$GITHUB_ENV"
+            echo "::warning file=middleware/src/gleam/manifest.toml::Gleam dependency resolution changed committed metadata; tests continue and reproducibility is enforced at the end"
+          fi
+      - name: Format and repeat native Gleam tests
+        run: |
+          set -euo pipefail
+          cd middleware/src/gleam
+          gleam format --check src test
+          for iteration in 1 2 3 4 5; do
+            echo "Gleam middleware iteration $iteration"
+            gleam test
+          done
+      - name: Validate Gleam descriptor and source contract surface
+        run: |
+          set -euo pipefail
+          cd middleware/src/gleam
+          jq -e '
+            .language == "gleam" and
+            .runtime == "erlang-otp" and
+            .packageName == "ores_middleware" and
+            (.frameworkAdapters | index("gleam-http")) != null and
+            (.frameworkAdapters | index("cowboy")) != null and
+            .operationSymbols.descriptor == "descriptor" and
+            .operationSymbols.createMiddleware == "create_middleware" and
+            .operationSymbols.currentContext == "current_context"
+          ' adapter.manifest.json
+          grep -Fq 'pub const contract_version = "1.0.0"' src/ores_middleware.gleam
+          grep -Fq '"request-context"' src/ores_middleware.gleam
+          grep -Fq '"deadline-timeout"' src/ores_middleware.gleam
+          grep -Fq '"auth"' src/ores_middleware.gleam
+      - name: Run randomized adversarial Gleam suite
+        run: |
+          set -euo pipefail
+          cd middleware
+          cargo run --quiet --manifest-path tools/middleware-adversarial-runner/Cargo.toml --package middleware-adversarial-runner -- --language gleam --iterations 10 --output-dir target/test-org/gleam/logs --receipt target/test-org/gleam/receipt.json
+          jq -e '.passed == true and (.runs | length) == 10 and all(.runs[]; .passed == true and .exit_code == 0)' target/test-org/gleam/receipt.json
+      - name: Prove authored Gleam source stayed immutable
+        if: ${{ always() }}
+        run: |
+          set -euo pipefail
+          git -C middleware diff --exit-code -- src/gleam/src src/gleam/test src/gleam/gleam.toml
+      - name: Record dependency metadata drift
+        if: ${{ always() }}
+        run: |
+          set -euo pipefail
+          mkdir -p middleware/target/test-org/gleam
+          if ! git -C middleware diff --quiet -- src/gleam/manifest.toml; then
+            git -C middleware diff -- src/gleam/manifest.toml > middleware/target/test-org/gleam/manifest.diff
+          fi
+      - name: Retain Gleam evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: flags-2-env-test-gleam-middleware-${{ github.run_id }}
+          path: middleware/target/test-org/gleam
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Enforce dependency-metadata reproducibility
+        if: ${{ always() }}
+        run: |
+          set -euo pipefail
+          if [ "${ORES_MIDDLEWARE_GLEAM_LOCK_DRIFT:-false}" = "true" ]; then
+            echo "::error file=middleware/src/gleam/manifest.toml::Gleam dependency resolution changed committed metadata; upstream manifest must be refreshed before promotion"
+            exit 1
+          fi
