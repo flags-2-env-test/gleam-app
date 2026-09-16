@@ -14,7 +14,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  ORES_MIDDLEWARE_SHA: bd6d8d99b9e97a51b7cc01218e3602623270582d
+  ORES_MIDDLEWARE_SHA: 6ec6aca66d09797e1677ed70106bc31a74d63819
 
 jobs:
   gleam:
@@ -76,7 +76,7 @@ jobs:
           grep -Fq 'pub type Middleware(' src/ores_middleware/generic.gleam
           grep -Fq 'pub fn compose(' src/ores_middleware/generic.gleam
           grep -Fq 'pub fn compose_named(' src/ores_middleware/generic.gleam
-          ! grep -Eiq 'supabase|clerk|auth0|firebase|okta|cognito' src/ores_middleware/generic.gleam
+          ! grep -Eiq 'supabase|clerk|auth0|firebase|okta|cognito|keycloak|workos' src/ores_middleware/generic.gleam
       - name: Validate Gleam descriptor and source contract surface
         run: |
           set -euo pipefail
