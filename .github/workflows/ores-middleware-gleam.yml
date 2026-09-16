@@ -60,7 +60,12 @@ jobs:
         run: |
           set -euo pipefail
           cd middleware/src/gleam
-          gleam format --check src test
+          if ! gleam format --check src test; then
+            gleam format src test
+            echo "--- canonical Gleam formatter diff ---"
+            git diff -- test/auth_baggage_enrichment_test.gleam
+            exit 1
+          fi
           for iteration in 1 2 3 4 5; do
             echo "Gleam middleware iteration $iteration"
             gleam test
