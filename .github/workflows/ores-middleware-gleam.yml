@@ -14,7 +14,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  ORES_MIDDLEWARE_SHA: 6ec6aca66d09797e1677ed70106bc31a74d63819
+  ORES_MIDDLEWARE_SHA: 9a26aed6dbe7a5c7227e07b8a8628b562b750100
 
 jobs:
   gleam:
