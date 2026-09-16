@@ -14,7 +14,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  ORES_MIDDLEWARE_SHA: d588e7bf890c337500641ed06d0b90f7b7a57748
+  ORES_MIDDLEWARE_SHA: bd6d8d99b9e97a51b7cc01218e3602623270582d
 
 jobs:
   gleam:
@@ -65,6 +65,18 @@ jobs:
             echo "Gleam middleware iteration $iteration"
             gleam test
           done
+      - name: Validate generic portability surface
+        run: |
+          set -euo pipefail
+          cd middleware/src/gleam
+          test -f src/ores_middleware/generic.gleam
+          grep -Fq 'pub type Provider(' src/ores_middleware/generic.gleam
+          grep -Fq 'pub type ContextualInput(' src/ores_middleware/generic.gleam
+          grep -Fq 'pub type Handler(' src/ores_middleware/generic.gleam
+          grep -Fq 'pub type Middleware(' src/ores_middleware/generic.gleam
+          grep -Fq 'pub fn compose(' src/ores_middleware/generic.gleam
+          grep -Fq 'pub fn compose_named(' src/ores_middleware/generic.gleam
+          ! grep -Eiq 'supabase|clerk|auth0|firebase|okta|cognito' src/ores_middleware/generic.gleam
       - name: Validate Gleam descriptor and source contract surface
         run: |
           set -euo pipefail
