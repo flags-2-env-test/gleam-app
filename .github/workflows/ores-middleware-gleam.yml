@@ -16,7 +16,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  ORES_MIDDLEWARE_SHA: 75997c01de440f6380c8d3bfa0b29644efabaefa
+  ORES_MIDDLEWARE_SHA: 2fd43eeee7d150fb136369c7d597ed5e670f5b9b
 
 jobs:
   gleam:
@@ -58,12 +58,11 @@ jobs:
             echo "ORES_MIDDLEWARE_GLEAM_LOCK_DRIFT=true" >> "$GITHUB_ENV"
             echo "::warning file=middleware/src/gleam/manifest.toml::Gleam dependency resolution changed committed metadata; tests continue and reproducibility is enforced at the end"
           fi
-      - name: Emit canonical formatting and repeat native Gleam tests
+      - name: Format and repeat native Gleam tests
         run: |
           set -euo pipefail
           cd middleware/src/gleam
-          gleam format src test
-          git diff -- src test
+          gleam format --check src test
           for iteration in 1 2 3 4 5; do
             echo "Gleam middleware iteration $iteration"
             gleam test
@@ -92,12 +91,11 @@ jobs:
           cd middleware
           cargo run --quiet --manifest-path tools/middleware-adversarial-runner/Cargo.toml --package middleware-adversarial-runner -- --language gleam --iterations 10 --output-dir target/test-org/gleam/logs --receipt target/test-org/gleam/receipt.json
           jq -e '.passed == true and (.runs | length) == 10 and all(.runs[]; .passed == true and .exit_code == 0)' target/test-org/gleam/receipt.json
-      - name: Record formatted source diff
+      - name: Prove authored Gleam source stayed immutable
         if: ${{ always() }}
         run: |
           set -euo pipefail
-          mkdir -p middleware/target/test-org/gleam
-          git -C middleware diff -- src/gleam/src src/gleam/test > middleware/target/test-org/gleam/format.diff || true
+          git -C middleware diff --exit-code -- src/gleam/src src/gleam/test src/gleam/gleam.toml
       - name: Record dependency metadata drift
         if: ${{ always() }}
         run: |
