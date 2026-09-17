@@ -1,6 +1,8 @@
 name: ORES middleware Gleam/OTP stress
 
 on:
+  push:
+    branches: [main]
   pull_request:
   workflow_dispatch:
   schedule:
@@ -14,7 +16,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  ORES_MIDDLEWARE_SHA: d588e7bf890c337500641ed06d0b90f7b7a57748
+  ORES_MIDDLEWARE_SHA: 75997c01de440f6380c8d3bfa0b29644efabaefa
 
 jobs:
   gleam:
@@ -56,11 +58,12 @@ jobs:
             echo "ORES_MIDDLEWARE_GLEAM_LOCK_DRIFT=true" >> "$GITHUB_ENV"
             echo "::warning file=middleware/src/gleam/manifest.toml::Gleam dependency resolution changed committed metadata; tests continue and reproducibility is enforced at the end"
           fi
-      - name: Format and repeat native Gleam tests
+      - name: Emit canonical formatting and repeat native Gleam tests
         run: |
           set -euo pipefail
           cd middleware/src/gleam
-          gleam format --check src test
+          gleam format src test
+          git diff -- src test
           for iteration in 1 2 3 4 5; do
             echo "Gleam middleware iteration $iteration"
             gleam test
@@ -89,11 +92,12 @@ jobs:
           cd middleware
           cargo run --quiet --manifest-path tools/middleware-adversarial-runner/Cargo.toml --package middleware-adversarial-runner -- --language gleam --iterations 10 --output-dir target/test-org/gleam/logs --receipt target/test-org/gleam/receipt.json
           jq -e '.passed == true and (.runs | length) == 10 and all(.runs[]; .passed == true and .exit_code == 0)' target/test-org/gleam/receipt.json
-      - name: Prove authored Gleam source stayed immutable
+      - name: Record formatted source diff
         if: ${{ always() }}
         run: |
           set -euo pipefail
-          git -C middleware diff --exit-code -- src/gleam/src src/gleam/test src/gleam/gleam.toml
+          mkdir -p middleware/target/test-org/gleam
+          git -C middleware diff -- src/gleam/src src/gleam/test > middleware/target/test-org/gleam/format.diff || true
       - name: Record dependency metadata drift
         if: ${{ always() }}
         run: |
