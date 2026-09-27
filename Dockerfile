@@ -12,7 +12,7 @@ COPY .vendor/.zed/oresoftware/flags-2-env ./.vendor/.zed/oresoftware/flags-2-env
 # loaded at runtime: flags2env_native.erl is compiled to BEAM and the NIF .so is
 # placed in that module's priv/ directory, where erlang:load_nif finds it.
 RUN mkdir -p /app/erlang_libs/flags2env_native/ebin /app/erlang_libs/flags2env_native/priv \
- && erlc -o /app/erlang_libs/flags2env_native/ebin .vendor/.zed/oresoftware/flags-2-env/clients/gleam/flags2env_native.erl \
+ && erlc -o /app/erlang_libs/flags2env_native/ebin .vendor/.zed/oresoftware/flags-2-env/clients/gleam/src/flags2env_native.erl \
  && ERL_INCLUDE="$(erl -noshell -eval 'io:format("~s/erts-~s/include", [code:root_dir(), erlang:system_info(version)]), halt().')" \
  && cc -std=c99 -DF2E_BEAM_MODULE_NATIVE -fPIC -shared \
       -I"$ERL_INCLUDE" -I.vendor/.zed/oresoftware/flags-2-env/clients/erlang/c_src \
